@@ -72,7 +72,7 @@ def argument_parsing():
 
 def define_colors():
     colors = {}
-    colors['red'] = '\033[1;31m'
+    colors['red'] = '\033[0;31m'
     colors['green'] = '\033[0;32m'
     colors['orange'] = '\033[0;33m'
     colors['yellow'] = '\033[1;33m'
@@ -124,8 +124,8 @@ class MorphTest:
         self.ana_result = None
         self.gen_result = None
         
-        self.gen_passed = False 
         self.ana_passed = False
+        self.gen_passed = False
 
         self.gen_unexpected = []
         self.gen_shouldnt = []
@@ -134,25 +134,62 @@ class MorphTest:
         self.ana_unexpected = []
         self.ana_shouldnt = []
         self.ana_missing = False
+
+        self.ana_tp = None
+        self.ana_tn = None
+        self.ana_fp = None
+        self.ana_fn = None
+        
+        self.gen_tp = None
+        self.gen_tn = None
+        self.gen_fp = None
+        self.gen_fn = None
     
-    def get_analysis(self):
-      if self.ana_passed: s = ' {green}[PASS]{reset} '
-      else: s = ' {red}[FAIL]{reset} '
-      s += '{0:<45}'.format(self.left + ' ' + self.direction + ' ' + self.right) 
-      if self.ana_missing: s += ' {orange}Missing{reset} ' + self.left
-      if len(self.ana_shouldnt):
-        s += " shouldn't analyze "
-        for item in set(self.ana_shouldnt):
-          s += item + '  '
-      if len(self.ana_unexpected):
-        s += ' {orange}Unexpected results:{reset} '
-        for item in set(self.ana_unexpected):
-          s += item + ' '
-      return s + '\n'
+    def get_test_results(self):
+      # printing test
+      s = '{0:<45}\n'.format(self.left + ' ' + self.direction + ' ' + self.right) 
+      
+      # printing whether it passed analysis or not
+      if self.ana_passed: s += ' {green}[✓]{reset} '
+      else: s += ' {red}[✗]{reset} '
+      s += 'Analysis:' + ' '*36
+
+      # print tp, tn, fp, fn 
+      if self.ana_passed: s += '{green}[✓]{reset}'
+      else: s += '{red}[✗]{reset}'
+      s += ' '*9
+      s += 'tbd' 
+      s += ' '*9
+      if len(self.ana_unexpected) == 0: s += '{green}[✓]{reset}'
+      else: s +=  '{red}[✗]{reset}' 
+      s += ' '*9
+      if self.ana_missing: s += '{red}[✗]{reset}'
+      else: s += '{green}[✓]{reset}'
+      s += '\n'
+      
+      # printing whether it passed generation or not
+      if self.gen_passed: s += ' {green}[✓]{reset} '
+      else: s += ' {red}[✗]{reset} '
+      s += 'Generation:' + ' '*34
+
+      # print tp, tn, fp, fn
+      if self.gen_passed: s += '{green}[✓]{reset}'
+      else: s += '{red}[✗]{reset}'
+      s += ' '*9
+      s += 'tbd'
+      s += ' '*9
+      if len(self.gen_unexpected) == 0: s += '{green}[✓]{reset}'
+      else: s +=  '{red}[✗]{reset}'  
+      s += ' '*9
+      if self.gen_missing: s += '{red}[✗]{reset}'
+      else: s += '{green}[✓]{reset}'
+      s += '\n'
+
+      return s
 
     def get_generation(self):
-     if self.gen_passed: s = ' {green}[PASS]{reset} '
-     else: s = ' {red}[FAIL]{reset} '
+     if self.gen_passed: s = ' {green}[✓]{reset} '
+     else: s = ' {red}[✗]{reset} '
      s += '{0:<45}'.format(self.left+' '+self.direction + ' '+self.right) 
      #if self.gen_missing or len(self.gen_unexpected): s += '{0:16}'.format(' ')
      if self.gen_missing: s += ' {orange}Missing{reset} ' + self.left
@@ -208,14 +245,12 @@ class Section:
         return tests 
     
     def __str__(self):
-        # TODO FIX THIS
-        s = 'Analysis:\n'
+        s = "{orange}-"*108 + '\n{reset}' + self.title + '\n'
+        s += 'Tests'+' '*45 + 'True pos    True neg    False pos   False neg    Comments\n'
+        s += '{orange}-{reset}'*108 + '\n'
         for test in self.tests:
-            s += test.get_analysis()
-        s += 'Generation:\n'
-        for test in self.tests:
-            s += test.get_generation()
-        s += 'Passes: {green}' + str(self.passes) + '{reset}/ Fails: {red}' + str(self.fails) + '{reset}\n'
+            s += test.get_test_results()
+        s += 'Passes: {green}' + str(self.passes) + '{reset} / Fails: {red}' + str(self.fails) + '{reset}\n\n'
         return s
 
     def get_tests(self):
@@ -239,9 +274,6 @@ class Results:
         self._io.write(string.format(*args, **kwargs))
   
     def print_section(self, section):
-        self.color_write("{light_blue}-" * len(section.title) + '\n')
-        self.color_write(section.title + '\n')
-        self.color_write("-" * len(section.title) + '{reset}\n')
         self.color_write(str(section))
 
     def print_final(self):
@@ -269,7 +301,6 @@ class Results:
 
 
     def run_analysis_tests(self, section):
-        #TODO make sure there is some loop after that corrects mistakenly unexpected
         for test in section.tests:
           if test.direction == '<=' or test.direction == '<=>': 
             for result in test.ana_result:
@@ -277,13 +308,14 @@ class Results:
                  test.ana_unexpected.append(result[0])
                  #test.ana_passed = False
                elif test.left == result[0]:
-                  test.ana_passed = True
-            if not test.ana_passed:
+                  test.ana_tp = True
+            if not test.ana_tp:
+              test.ana_fn = True
               test.ana_missing = True
           else: #generation only
             for result in test.ana_result:
               if result[0] not in section.analysis_dict[test.right]:
-                test.ana_shouldnt.append(result[0])
+                test.ana_unexpected.append(result[0])
               elif test.left == result[0]:
                 test.ana_shouldnt.append(result[0])
             if len(test.ana_shouldnt) == 0:
