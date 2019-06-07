@@ -1,0 +1,24 @@
+Config:
+  hfst:
+    App: libhfst
+    Gen: test.autogen.hfst
+    Morph: test.automorf.hfst
+Tests:
+  Nouns:
+    rãnhrãj<n>:
+      <=>: rãnhrãj
+    mẽg<n>:
+      <=: mẽg
+    si<n>:
+      =>:
+          - si
+          - se
+    kanér<n>:
+      <=: kanér
+      <=>: 
+          - nhinsu
+          - ẽgóho
+    hello<n>:
+      <=: hello
+    hi<n>:
+      <=: hello
