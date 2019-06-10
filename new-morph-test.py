@@ -1,11 +1,10 @@
 """
-
 **to dos:
-  -error checking
-  -commenting
-  -implementing the arg options 
-  -print nicely
+  - implement ignore analyses, hide fails+passes, output types
+  - make sure tests are actually working now 
+  -    # add 'do not analyse' negation (for spellchecker testing)
 This script performs a morphological test on a file.
+Author: Danielle Rossetti Dos Santos
 """
 from argparse import ArgumentParser
 from collections import OrderedDict
@@ -15,58 +14,53 @@ import sys
 import yaml
 import time 
 
+pass_mark = '{green}[✓]{reset}'
+fail_mark = '{red}[✗]{reset}'
+na_mark = ' - '
+
 def error_checking(n):
     msg = 'Error: '
-    if n == 2:   msg += '.'
-    elif n == 3: msg += '.'
-    elif n == 4: msg += '.'
-    elif n == 5: msg += '.'
-    elif n == 6: msg += '.'
+    if n == 2:   msg += 'there was an error opening the file provided.'
+    elif n == 3: msg += 'outer sections of file should be "Config" and "Tests".'
+    elif n == 4: 
+      msg += 'within "Config", there should be an "hfst" section, which in '
+      msg += 'turn should have a "Morph" and a "Gen" section.'
+    elif n == 5: 
+      msg += 'make sure items under "Tests" are mappings and follow the format.'
+    elif n == 6: msg += 'possible direction arrows are =>, <=, or <=>.'
+    elif n == 7: msg += 'the section requested does not exist.'
     print(msg)
     sys.exit(num)
 
 def argument_parsing():
     ap = ArgumentParser()
     ap.description = 'This script performs a morphological test.'
-
-    h = 'Output style: compact, terse, final, normal (Default: normal)'
+    
+    h = 'Output style:\n'
+    h += '*normal (TP, TN, FP, FN for each analysis and generationt test)\n'
+    h += '*compact (whether sections passed or failed)\n'
+    h += '*final (total number of passes, fails, and overall tests)\n'
+    h += '*none (no output, only exit code)\n'
+    h += '(Default: normal)'
     ap.add_argument('-o', '--output', dest='output', default='normal', help=h)
     
-    h = 'No output, only exit code.'
-    ap.add_argument('-q', '--silent', dest='silent', action='store_true', help=h)
-
-    h = 'Ignore unexpected analyses. Will pass if expected one is found.'
-    ap.add_argument('-i', '--ignore-unexpected', dest='ignore', action='store_true', help=h)
+    h = 'Ignores any false positives. Will pass if expected results are found.'
+    ap.add_argument('-i', '--ignore-extra-analyses',
+                    dest='ignore', action='store_true', help=h)
     
-    h = 'Surface input/analysis tests only'
-    ap.add_argument('-s', '--surface', dest='surface', action='store_true', help=h)
+    ap.add_argument('-p', '--hide-fails', dest='hide_fail', action='store_true',                    help='Suppresses fails to make finding passes easier.')
 
-    h = 'Lexical input/generation tests only'
-    ap.add_argument('-l', '--lexical', dest='lexical', action='store_true', help=h)
-
-    # remember this change
-    h = 'Suppresses fails to make finding passes easier'
-    ap.add_argument('-p', '--hide-fails', dest='hide_fail', action='store_true', help=h)
-
-    # same change 
     h = 'Suppresses passes to make finding failures easier'
-    ap.add_argument('-f', '--hide-passes', dest='hide_pass', action='store_true', help=h)
+    ap.add_argument('-f', '--hide-passes', dest='hide_pass', 
+                    action='store_true', help=h)
 
-    # make this into choose what section to run
-    h = 'The section to be used for testing (default is `hfst`)'
-    ap.add_argument('-S', '--section', default='hfst', dest='section', 
-                    nargs='?', required=False, help=h)
+    h = 'Section to run tests on (Default: all). Enter the # of the section.'
+    ap.add_argument('-t', '--test', dest='test', type=int, default='-1', help=h)
+  
+    ap.add_argument('-v', '--verbose', dest='verbose', action='store_true', 
+                    help='More verbose output.')
     
-    # make required and this says what language code
-    h = 'Which fallback transducer to use.'
-    ap.add_argument('-F', '--fallback', dest='transducer', nargs='?', required=False, help=h)
-    h = 'More verbose output.' 
-    ap.add_argument('-v', '--verbose', dest='verbose', action='store_true', help=h)
-    # add 'do not analyse' negation (for spellchecker testing)
-    # add verbose
-    
-    ap.add_argument('file', help='YAML file with test rules')
-
+    ap.add_argument('test_file', help='YAML file with test rules')
     arguments = ap.parse_args()
     return arguments
 
@@ -74,10 +68,7 @@ def define_colors():
     colors = {}
     colors['red'] = '\033[0;31m'
     colors['green'] = '\033[0;32m'
-    colors['orange'] = '\033[0;33m'
-    colors['yellow'] = '\033[1;33m'
-    colors['blue'] = '\033[0;34m'
-    colors['light_blue'] = '\033[0;36m'
+    colors['yellow'] = '\033[0;33m'
     colors['reset'] = '\033[m'
     return colors
 
@@ -119,81 +110,130 @@ class MorphTest:
         self.left = left
         self.direction = direction 
         self.right = right
+        self.passed_analysis = False
+        self.passed_generation = False
 
         # these will be added when running the tests
         self.ana_result = []
         self.gen_result = []
       
+        # used for determining if test passed analysis
         self.ana_tn = True
         self.ana_fp = []
         self.ana_missing = True
 
+        # used for determining if test passed generation
         self.gen_tn = True
         self.gen_fp = []
         self.gen_missing = True
 
     def get_test_results(self):
-      # printing test
-      s = '{0:<45}\n'.format(self.left + ' ' + self.direction + ' ' + self.right) 
+      # did analysis pass?
+      if not self.ana_missing  \
+      and not len(self.ana_fp) \
+      and (self.ana_tn or self.ana_tn is None):
+          self.passed_analysis = True
+      # did generation pass?
+      if not self.gen_missing  \
+      and not len(self.gen_fp) \
+      and (self.gen_tn or self.gen_tn is None):
+          self.passed_generation = True
+
+      # starting with test
+      s = '{0:<45}\n '.format(self.left+' '+self.direction+' '+self.right) 
       
-      # printing whether it passed analysis or not
-      if self.ana_missing or len(self.ana_fp) or self.ana_tn == False: s += ' {red}[✗]{reset} '
-      else: s += ' {green}[✓]{reset} '
-      s += 'Analysis:' + ' '*26
+      # analysis check mark
+      if self.passed_analysis: s += pass_mark
+      else: s += fail_mark
+      s += ' Analysis:' + ' '*25
 
-      # print tp, tn, fp, fn 
-      if self.ana_missing: s += '{red}[✗]{reset}'
-      elif self.ana_missing == None: s += ' - '
-      else: s += '{green}[✓]{reset}'
+      # analysis tp, tn, fp, fn row
+      # true positive:
+      if self.ana_missing: s += fail_mark
+      elif self.ana_missing == None: s += na_mark
+      else: s += pass_mark
       s += ' '*9
-      if self.ana_tn: s += '{green}[✓]{reset}'
-      elif self.ana_tn == None: s += ' - '
-      else: s += '{red}[✗]{reset}'
-      s += ' '*9
-      if not len(self.ana_fp): s += '{green}[✓]{reset}'
-      else: s +=  '{red}[✗]{reset}' 
-      s += ' '*9
-      if self.ana_missing: s += '{red}[✗]{reset}'
-      elif self.ana_missing == None: s += ' - '
-      else: s += '{green}[✓]{reset}'
-      s += ' '*10
-      s += '\n'
 
-      # printing whether it passed generation or not
-      if self.gen_missing or len(self.gen_fp) or self.gen_tn == False: s += ' {red}[✗]{reset} '
-      else: s += ' {green}[✓]{reset} '
-      s += 'Generation:' + ' '*24
+      # true negative:
+      if self.ana_tn: s += pass_mark
+      elif self.ana_tn == None: s += na_mark
+      else: s += fail_mark
+      s += ' '*9
+
+      # false positive:
+      if not len(self.ana_fp): s += pass_mark
+      else: s +=  fail_mark
+      s += ' '*9
+
+      # false negative:
+      if self.ana_missing: s += fail_mark
+      elif self.ana_missing == None: s += na_mark
+      else: s += pass_mark
+      s += '\n '
+
+      # generation check mark
+      if self.passed_generation: s += pass_mark
+      else: s += fail_mark
+      s += ' Generation:' + ' '*23
       
-      # print tp, tn, fp, fn 
-      if self.gen_missing: s += '{red}[✗]{reset}'
-      elif self.gen_missing == None: s += ' - '
-      else: s += '{green}[✓]{reset}'
+      # generation tp, tn, fp, fn row 
+      # true positive:
+      if self.gen_missing: s += fail_mark
+      elif self.gen_missing == None: s += na_mark
+      else: s += pass_mark
       s += ' '*9
-      if self.gen_tn: s += '{green}[✓]{reset}'
-      elif self.gen_tn == None: s += ' - '
-      else: s += '{red}[✗]{reset}'
-      s += ' '*9
-      if not len(self.gen_fp): s += '{green}[✓]{reset}'
-      else: s +=  '{red}[✗]{reset}'
-      s += ' '*9
-      if self.gen_missing: s += '{red}[✗]{reset}'
-      elif self.gen_missing == None: s += ' - '
-      else: s += '{green}[✓]{reset}'
-      s += '\n'
 
-      if self.ana_missing or len(self.ana_fp): s += ' {orange}Comments: '
-      if self.ana_missing: s += "test didn't return " + self.left + '. '
-      if len(self.ana_fp): s += 'test incorrectly returned'
-      for analysis in self.ana_fp:
-        s += ' ' + analysis
-      s += '\n'
-      if self.ana_missing or len(self.ana_fp): s += '{reset}\n'
+      # true negative:
+      if self.gen_tn: s += pass_mark
+      elif self.gen_tn == None: s += na_mark
+      else: s += fail_mark
+      s += ' '*9
 
-      return s
+      # false positive:
+      if not len(self.gen_fp): s += pass_mark
+      else: s +=  fail_mark
+      s += ' '*9
+
+      # false negative:
+      if self.gen_missing: s += fail_mark
+      elif self.gen_missing == None: s += na_mark
+      else: s += pass_mark
+      s += '\n'
+      
+      # comments
+      if not self.passed_analysis or not self.passed_generation: 
+        c = ' {yellow}Comments: '
+        # analysis:
+        if self.ana_missing: c += 'analysis is missing {0}. '.format(self.left)
+        if self.ana_tn == False: c += '{0} was generated. '.format(self.right)
+        if len(self.ana_fp):
+          c += 'analysis returned unexpected result'
+          if len(self.ana_fp) > 1:
+            c += 's: '
+            for analysis in self.ana_fp[:-1]:
+              c += '{0}, '.format(analysis)
+            c += 'and {0}.'.format(self.ana_fp[-1])
+          elif len(self.ana_fp) == 1: c += ': {0}. '.format(self.ana_fp[0])       
+        # generation:
+        if self.gen_missing: 
+          c += 'generation is missing {0}. '.format(self.right)
+        if self.gen_tn == False: c += '{0} was analyzed. '.format(self.left)
+        if len(self.gen_fp):
+          c += 'generation returned unexpected result'
+          if len(self.gen_fp) > 1:
+            c += 's: '
+            for generation in self.gen_fp[:-1]:
+              c += '{0}, '.format(generation)
+            c += 'and {0}.'.format(self.gen_fp[-1])
+          elif len(self.gen_fp) == 1: c += ': {0}.'.format(self.gen_fp[0])
+        c += '{reset}\n\n'
+      else: c = '\n'
+      return s + c
 
 class Section:
-    def __init__(self, title, mappings):
+    def __init__(self, title, number, mappings):
         self.title = title
+        self.number = number
         self.mappings = mappings 
         self.passes = 0
         self.fails = 0
@@ -201,54 +241,63 @@ class Section:
 
     def populate_tests(self):
         tests = []
+
+        # for each left (direction) right mapping:
         for left in self.mappings:
           for map_direction, right in self.mappings[left].items():
+            # if there are multiple items
             if isinstance(right, list):
               for item in right:
                 if map_direction in ['=>', '<=', '<=>']:
                   tests.append(MorphTest(left, item, map_direction))
-                else:
-                  print('Error: possible direction arrows are =>, <=, or <=>.')
-                  sys.exit(1)
+                else: error_checking(6)
+            # if there is only one item
             else:
               if map_direction in ['=>', '<=', '<=>']:
                   tests.append(MorphTest(left, right, map_direction))
-              else:
-                  print('Error: possible direction arrows are =>, <=, or <=>.')
-                  sys.exit(1)
+              else: error_checking(6)
        
         return tests 
     
     def __str__(self):
-        s = "{orange}-"*80 + '\n{reset}' + self.title + '\n'
-        s += 'Tests'+' '*30 + 'True pos    True neg    False pos   False neg\n'
-        s += '{orange}-{reset}'*80 + '\n'
+        # make section header into a string
+        s = '{yellow}-'*80 + '{reset}\n'
+        s += '{0}\nTests - section #{1:<17}'.format(self.title, self.number)
+        s += 'True pos    True neg   False pos   False neg\n'
+        s += '{yellow}-'*80 + '{reset}\n'
+
+        # make tests in section into strings
         for test in self.tests:
             s += test.get_test_results()
-        s += 'Passes: {green}' + str(self.passes) + '{reset} / Fails: {red}' + str(self.fails) + '{reset}\n\n'
+
+        # make passes and fails counts into strings
+        s += 'Passes: {0}{1}{2}, '.format('{green}', self.passes, '{reset}')
+        s += 'Fails: {0}{1}{2}\n\n'.format('{red}', self.fails, '{reset}')
         return s
 
-    def get_tests(self):
-        return self.tests
-
 class Results:
-    def __init__(self, sections_list, morph, gen):
-        self.sections = sections_list
-        self.generation_dict = {}
+    def __init__(self, sections_list, morph, gen, args):
+        # these dictionaries help ensuring there aren't false positives
         self.analysis_dict = {}
-        for section in self.sections:
+        for section in sections_list:
           for test in section.tests:
             if test.right in self.analysis_dict:
               self.analysis_dict[test.right].append(test.left)
-            else:
-              self.analysis_dict[test.right] = [test.left]
-            if test.left in self.generation_dict:
-              self.generation_dict[test.left].append(test.right)
-            else:
-              self.generation_dict[test.left] = [test.right]
+            else: self.analysis_dict[test.right] = [test.left]
+  
+        self.generation_dict = {}
+        for section in sections_list:
+          for test in section.tests:
+            if test.right in self.generation_dict:
+              self.analysis_dict[test.left].append(test.right)
+            else: self.generation_dict[test.left] = [test.right]
         
+        self.sections = sections_list
         self.morph_path = morph
         self.gen_path = gen
+        self.args = args
+
+        # printing stuff
         self._io = StringIO()
         self.colors = define_colors()
         self.fails = 0
@@ -260,14 +309,17 @@ class Results:
     def color_write(self, string, *args, **kwargs):
         kwargs.update(self.colors)
         self._io.write(string.format(*args, **kwargs))
-  
-    def print_section(self, section):
-        self.color_write(str(section))
+    
+    def print_normal(self): 
+        pass
+
+    def print_compact(self):
+        pass
 
     def print_final(self):
-        self.color_write('Total passes: {green}' + str(self.passes) + '{reset}, ')
-        self.color_write('Total fails: {red}' + str(self.fails) + '{reset}, ')
-        self.color_write('Total: {light_blue}' + str(self.passes + self.fails) + '{reset}\n')
+        s = 'Total passes: {0}{1}{2}'.format('{green}', self.passes, '{reset}')
+        s += ', Total fails: {0}{1}{2}'.format('{red}', self.fails, '{reset}')
+        self.color_write(s)
 
     def print_nothing(self):
         if self.fails > 0:
@@ -275,85 +327,128 @@ class Results:
         else:
             return 0
 
+    def print_section(self, section):
+        self.color_write(str(section))
+
     def lookup(self):
+        # getting analysis data used in test
         analysis_stream = libhfst.HfstInputStream(self.morph_path).read()
+        for section in self.sections:
+          for test in section.tests:
+            for result in analysis_stream.lookup(test.right):
+              test.ana_result.append(result[0])
+        
+        # getting generation data used in test
         generation_stream = libhfst.HfstInputStream(self.gen_path).read()
         for section in self.sections:  
             for test in section.tests:
-               for result in analysis_stream.lookup(test.right):
-                 test.ana_result.append(result[0])
                for result in generation_stream.lookup(test.left):
                  test.gen_result.append(result[0])
           
-    def run_tests(self, section):
+    def run_analysis_tests(self, section):
+        if self.args.verbose: print('Running analysis tests...')
         for test in section.tests:
-          print(test.left, test.direction, test.right, 'gen:', test.gen_result, 'ana:', test.ana_result)
           for result in test.ana_result:
             if test.direction == '<=' or test.direction == '<=>':
-              if result == test.left:
+              if result == test.left: 
+                # true positive was found
                 test.ana_missing = False
               elif result not in self.analysis_dict[test.right]:
+                # if not in dict it's false positive
                 test.ana_fp.append(result)
               if test.direction == '<=>':
+                # there can't be a true negative
                 test.ana_tn = None
-            else: #test.direction is '=>'
+            else: # test is generation only =>
+              # analysis missing is a good thing here so N/A
               test.ana_missing = None
               if result == test.left:
+                # this shouldn't happen, so true negative fails
                 test.ana_tn = False
-          
+
+    def run_generation_tests(self, section):
+        if self.args.verbose: print('Running generation tests...')
+        for test in section.tests:  
           for result in test.gen_result:
             if test.direction == '=>' or test.direction == '<=>':
               if result == test.right:
+                # true positive was found
                 test.gen_missing = False
               elif result not in self.generation_dict[test.left]:
+                #if not in dict it's false positive
                 test.gen_fp.append(result)
               if test.direction == '<=>':
+                # there can't be a true negative
                 test.gen_tn = None
-            else: # test.direction is '<='
+            else: # test is analysis only <=
+              # analysis missing is a good thing here so N/A
               test.gen_missing = None
               if result == test.right:
+                # this shouldn't happen, so true negative fails
                 test.gen_tn = False
 
-       #add verbose, color, type of output etc
     def run(self):
         self.lookup()
-        for section in self.sections:
-            self.run_tests(section)
-            #self.run_generation_tests(section)
-            self.print_section(section)
-        self.print_final()
+        if self.args.test >= 0:
+          if self.args.test > len(self.sections) - 1: error_checking(7)
+          if self.args.verbose:
+            print('Running tests on section #{0}'.format(self.args.test))
+          section = self.sections[self.args.test]
+          self.run_analysis_tests(section)
+          self.run_generation_tests(section)
+          self.print_section(section)
+          self.print_final()
+        else:
+            for section in self.sections:
+                if self.args.verbose: 
+                  print('Running tests on section #{0}'.format(section.number))
+                self.run_analysis_tests(section)
+                self.run_generation_tests(section)
+                self.print_section(section)
+            self.print_final()
         print(self)
           
 
-def load_data(filename):
-    yaml_file = open(filename, 'r')
+def load_data(args):
+    try: yaml_file = open(args.test_file, 'r')
+    except: error_checking(2)
+    if args.verbose: print('Opened file.')
+  
+    # creating an ordered dictionary from the yaml file
     dictionary = yaml_load_ordered(yaml_file)
     yaml_file.close()
-    
+    if args.verbose: print('Created dictionary from yaml file.')
+      
+    # ensure dictionary contains only confif and tests
+    if not dictionary['Config'] or not dictionary['Tests']: error_checking(3)
+    if len(dictionary) != 2: error_checking(3)
+
+    try:
+      # getting config - script currently only works with .hfst files
+      hfst_config = dictionary['Config']['hfst']
+      morph = hfst_config['Morph']
+      gen = hfst_config['Gen']
+
+      # getting tests
+      tests = dictionary['Tests']
+    except: error_checking(4)
+
     all_sections = []
-    # ensure dictionary contains only config and tests
-    #getting config
-    hfst_config = dictionary['Config']['hfst']
-    morph = hfst_config['Morph']
-    gen = hfst_config['Gen']
-    #getting tests
-    tests = dictionary['Tests']
-    all_sections = []
-    for title in tests:
-        #add error if tests[title] isn't just mappings 
-        section = Section(title, tests[title])
+    for num, title in enumerate(tests):
+        # error if tests[title] isn't an ordered dictionary
+        if not isinstance(tests[title], OrderedDict): error_checking(5)
+        section = Section(title, num, tests[title])
         all_sections.append(section)
+    if args.verbose: print('Created section objects.')
 
     return all_sections, morph, gen
 
-def main():
-    t0 = time.time()    
+def main(): 
     args = argument_parsing()
-    sections, morph, gen = load_data(args.file)
-    results = Results(sections, morph, gen)
+    sections, morph, gen = load_data(args)
+    if args.verbose: print('Getting results...')
+    results = Results(sections, morph, gen, args)
     results.run()
-    t1 = time.time()
-    print(t1-t0)
 
 if __name__ == "__main__":
     main()
