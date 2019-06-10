@@ -1,6 +1,6 @@
 Config:
   hfst:
-    App: libhfst
+    App: hfst-lookup
     Gen: test.autogen.hfst
     Morph: test.automorf.hfst
 Tests:
