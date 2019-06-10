@@ -15,13 +15,13 @@ import sys
 import yaml
 import time 
 
-def error_checking(num):
+def error_checking(n):
     msg = 'Error: '
-    if num == 2: msg += '.'
-    elif num == 3: msg += '.'
-    elif num == 4: msg += '.'
-    elif num == 5: msg += '.'
-    elif num == 6: msg += '.'
+    if n == 2:   msg += '.'
+    elif n == 3: msg += '.'
+    elif n == 4: msg += '.'
+    elif n == 5: msg += '.'
+    elif n == 6: msg += '.'
     print(msg)
     sys.exit(num)
 
@@ -121,87 +121,75 @@ class MorphTest:
         self.right = right
 
         # these will be added when running the tests
-        self.ana_result = None
-        self.gen_result = None
-        
-        self.ana_passed = False
-        self.gen_passed = False
+        self.ana_result = []
+        self.gen_result = []
+      
+        self.ana_tn = True
+        self.ana_fp = []
+        self.ana_missing = True
 
-        self.gen_unexpected = []
-        self.gen_shouldnt = []
-        self.gen_missing = False
+        self.gen_tn = True
+        self.gen_fp = []
+        self.gen_missing = True
 
-        self.ana_unexpected = []
-        self.ana_shouldnt = []
-        self.ana_missing = False
-
-        self.ana_tp = None
-        self.ana_tn = None
-        self.ana_fp = None
-        self.ana_fn = None
-        
-        self.gen_tp = None
-        self.gen_tn = None
-        self.gen_fp = None
-        self.gen_fn = None
-    
     def get_test_results(self):
       # printing test
       s = '{0:<45}\n'.format(self.left + ' ' + self.direction + ' ' + self.right) 
       
       # printing whether it passed analysis or not
-      if self.ana_passed: s += ' {green}[✓]{reset} '
-      else: s += ' {red}[✗]{reset} '
-      s += 'Analysis:' + ' '*36
+      if self.ana_missing or len(self.ana_fp) or self.ana_tn == False: s += ' {red}[✗]{reset} '
+      else: s += ' {green}[✓]{reset} '
+      s += 'Analysis:' + ' '*26
 
       # print tp, tn, fp, fn 
-      if self.ana_passed: s += '{green}[✓]{reset}'
+      if self.ana_missing: s += '{red}[✗]{reset}'
+      elif self.ana_missing == None: s += ' - '
+      else: s += '{green}[✓]{reset}'
+      s += ' '*9
+      if self.ana_tn: s += '{green}[✓]{reset}'
+      elif self.ana_tn == None: s += ' - '
       else: s += '{red}[✗]{reset}'
       s += ' '*9
-      s += 'tbd' 
-      s += ' '*9
-      if len(self.ana_unexpected) == 0: s += '{green}[✓]{reset}'
+      if not len(self.ana_fp): s += '{green}[✓]{reset}'
       else: s +=  '{red}[✗]{reset}' 
       s += ' '*9
       if self.ana_missing: s += '{red}[✗]{reset}'
+      elif self.ana_missing == None: s += ' - '
       else: s += '{green}[✓]{reset}'
+      s += ' '*10
       s += '\n'
-      
-      # printing whether it passed generation or not
-      if self.gen_passed: s += ' {green}[✓]{reset} '
-      else: s += ' {red}[✗]{reset} '
-      s += 'Generation:' + ' '*34
 
-      # print tp, tn, fp, fn
-      if self.gen_passed: s += '{green}[✓]{reset}'
+      # printing whether it passed generation or not
+      if self.gen_missing or len(self.gen_fp) or self.gen_tn == False: s += ' {red}[✗]{reset} '
+      else: s += ' {green}[✓]{reset} '
+      s += 'Generation:' + ' '*24
+      
+      # print tp, tn, fp, fn 
+      if self.gen_missing: s += '{red}[✗]{reset}'
+      elif self.gen_missing == None: s += ' - '
+      else: s += '{green}[✓]{reset}'
+      s += ' '*9
+      if self.gen_tn: s += '{green}[✓]{reset}'
+      elif self.gen_tn == None: s += ' - '
       else: s += '{red}[✗]{reset}'
       s += ' '*9
-      s += 'tbd'
-      s += ' '*9
-      if len(self.gen_unexpected) == 0: s += '{green}[✓]{reset}'
-      else: s +=  '{red}[✗]{reset}'  
+      if not len(self.gen_fp): s += '{green}[✓]{reset}'
+      else: s +=  '{red}[✗]{reset}'
       s += ' '*9
       if self.gen_missing: s += '{red}[✗]{reset}'
+      elif self.gen_missing == None: s += ' - '
       else: s += '{green}[✓]{reset}'
       s += '\n'
 
-      return s
+      if self.ana_missing or len(self.ana_fp): s += ' {orange}Comments: '
+      if self.ana_missing: s += "test didn't return " + self.left + '. '
+      if len(self.ana_fp): s += 'test incorrectly returned'
+      for analysis in self.ana_fp:
+        s += ' ' + analysis
+      s += '\n'
+      if self.ana_missing or len(self.ana_fp): s += '{reset}\n'
 
-    def get_generation(self):
-     if self.gen_passed: s = ' {green}[✓]{reset} '
-     else: s = ' {red}[✗]{reset} '
-     s += '{0:<45}'.format(self.left+' '+self.direction + ' '+self.right) 
-     #if self.gen_missing or len(self.gen_unexpected): s += '{0:16}'.format(' ')
-     if self.gen_missing: s += ' {orange}Missing{reset} ' + self.left
-     if len(self.gen_shouldnt):
-       s += " shouldn't generate "
-       for item in set(self.gen_shouldnt):
-         s += item + '  '
-     if len(self.gen_unexpected):
-       s += ' Unexpected results: '
-       for item in set(self.gen_unexpected):
-         s += item + '  '
-     return s + '\n'
+      return s
 
 class Section:
     def __init__(self, title, mappings):
@@ -209,9 +197,6 @@ class Section:
         self.mappings = mappings 
         self.passes = 0
         self.fails = 0
-
-        self.analysis_dict = {} # important for checking unexpected
-        self.generation_dict = {}
         self.tests = self.populate_tests()
 
     def populate_tests(self):
@@ -231,23 +216,13 @@ class Section:
               else:
                   print('Error: possible direction arrows are =>, <=, or <=>.')
                   sys.exit(1)
-
-        for test in tests:
-          if test.right in self.analysis_dict:
-            self.analysis_dict[test.right].append(test.left)
-          else:
-            self.analysis_dict[test.right] = [test.left]
-          if test.left in self.generation_dict:
-            self.generation_dict[test.left].append(test.right)
-          else:
-            self.generation_dict[test.left] = [test.right]
-        
+       
         return tests 
     
     def __str__(self):
-        s = "{orange}-"*108 + '\n{reset}' + self.title + '\n'
-        s += 'Tests'+' '*45 + 'True pos    True neg    False pos   False neg    Comments\n'
-        s += '{orange}-{reset}'*108 + '\n'
+        s = "{orange}-"*80 + '\n{reset}' + self.title + '\n'
+        s += 'Tests'+' '*30 + 'True pos    True neg    False pos   False neg\n'
+        s += '{orange}-{reset}'*80 + '\n'
         for test in self.tests:
             s += test.get_test_results()
         s += 'Passes: {green}' + str(self.passes) + '{reset} / Fails: {red}' + str(self.fails) + '{reset}\n\n'
@@ -259,6 +234,19 @@ class Section:
 class Results:
     def __init__(self, sections_list, morph, gen):
         self.sections = sections_list
+        self.generation_dict = {}
+        self.analysis_dict = {}
+        for section in self.sections:
+          for test in section.tests:
+            if test.right in self.analysis_dict:
+              self.analysis_dict[test.right].append(test.left)
+            else:
+              self.analysis_dict[test.right] = [test.left]
+            if test.left in self.generation_dict:
+              self.generation_dict[test.left].append(test.right)
+            else:
+              self.generation_dict[test.left] = [test.right]
+        
         self.morph_path = morph
         self.gen_path = gen
         self._io = StringIO()
@@ -290,62 +278,48 @@ class Results:
     def lookup(self):
         analysis_stream = libhfst.HfstInputStream(self.morph_path).read()
         generation_stream = libhfst.HfstInputStream(self.gen_path).read()
-        for section in self.sections:
-            print(section.title)
+        for section in self.sections:  
             for test in section.tests:
-               test.ana_result = analysis_stream.lookup(test.right)
-               test.gen_result = generation_stream.lookup(test.left)
-               print('Analysis for', test.right, ':', test.ana_result)
-               print('Generation for', test.left, ':', test.gen_result)
-               print()
-
-
-    def run_analysis_tests(self, section):
+               for result in analysis_stream.lookup(test.right):
+                 test.ana_result.append(result[0])
+               for result in generation_stream.lookup(test.left):
+                 test.gen_result.append(result[0])
+          
+    def run_tests(self, section):
         for test in section.tests:
-          if test.direction == '<=' or test.direction == '<=>': 
-            for result in test.ana_result:
-               if result[0] not in section.analysis_dict[test.right]:
-                 test.ana_unexpected.append(result[0])
-                 #test.ana_passed = False
-               elif test.left == result[0]:
-                  test.ana_tp = True
-            if not test.ana_tp:
-              test.ana_fn = True
-              test.ana_missing = True
-          else: #generation only
-            for result in test.ana_result:
-              if result[0] not in section.analysis_dict[test.right]:
-                test.ana_unexpected.append(result[0])
-              elif test.left == result[0]:
-                test.ana_shouldnt.append(result[0])
-            if len(test.ana_shouldnt) == 0:
-              test.ana_passed = True
+          print(test.left, test.direction, test.right, 'gen:', test.gen_result, 'ana:', test.ana_result)
+          for result in test.ana_result:
+            if test.direction == '<=' or test.direction == '<=>':
+              if result == test.left:
+                test.ana_missing = False
+              elif result not in self.analysis_dict[test.right]:
+                test.ana_fp.append(result)
+              if test.direction == '<=>':
+                test.ana_tn = None
+            else: #test.direction is '=>'
+              test.ana_missing = None
+              if result == test.left:
+                test.ana_tn = False
+          
+          for result in test.gen_result:
+            if test.direction == '=>' or test.direction == '<=>':
+              if result == test.right:
+                test.gen_missing = False
+              elif result not in self.generation_dict[test.left]:
+                test.gen_fp.append(result)
+              if test.direction == '<=>':
+                test.gen_tn = None
+            else: # test.direction is '<='
+              test.gen_missing = None
+              if result == test.right:
+                test.gen_tn = False
 
-    def run_generation_tests(self, section):
-        for test in section.tests:
-          if test.direction == '=>' or test.direction == '<=>':
-            for result in test.gen_result:
-               if result[0] not in section.generation_dict[test.left]:
-                 test.gen_unexpected.append(result[0])
-               elif result[0] == test.right:
-                  test.gen_passed = True
-            if not test.gen_passed:
-              test.gen_missing = True
-          else: #analysis only
-            for result in test.gen_result:
-              if result[0] not in section.generation_dict[test.left]:
-                test.gen_shouldnt.append(result[0])
-              elif result[0] == test.right:
-                test.gen_shouldnt.append(result[0])
-            if len(test.gen_shouldnt) == 0:
-              test.gen_passed = True
-       
        #add verbose, color, type of output etc
     def run(self):
         self.lookup()
         for section in self.sections:
-            self.run_analysis_tests(section)
-            self.run_generation_tests(section)
+            self.run_tests(section)
+            #self.run_generation_tests(section)
             self.print_section(section)
         self.print_final()
         print(self)
