@@ -2,8 +2,7 @@
 This script performs a morphological test on a yaml file.
 
 **to dos:
-  - make the counting of passes and fails not a total mess (it works but it's messy) 
-  -    # add 'do not analyse' negation (for spellchecker testing)
+  - add spellchecker negation testing
 
 Author: Danielle Rossetti Dos Santos
 """
@@ -117,8 +116,6 @@ class MorphTest:
         self.left = left
         self.direction = direction 
         self.right = right
-        self.passed_analysis = False
-        self.passed_generation = False
         self.hide_passes = False
 
         # these will be added when running the tests
@@ -137,26 +134,30 @@ class MorphTest:
         self.gen_missing = True
         self.ignore_gen_fp = False
 
-    def get_test_results(self):
+    def passed_analysis(self):
       # did analysis pass?
       if not self.ana_missing and (self.ana_tn or self.ana_tn is None):
-        if self.ignore_ana_fp: self.passed_analysis = True
-        elif not len(self.ana_fp): self.passed_analysis = True
+        if self.ignore_ana_fp: return True
+        elif not len(self.ana_fp): return True
+      return False
 
+    def passed_generation(self):
       # did generation pass?
       if not self.gen_missing and (self.gen_tn or self.gen_tn is None):
-        if self.ignore_gen_fp: self.passed_generation = True
-        elif not len(self.gen_fp): self.passed_generation = True
+        if self.ignore_gen_fp: return True
+        elif not len(self.gen_fp): return True
+      return False
 
+    def get_test_results(self):
       # starting with test
       # if passes don't need to be hidden or one direction has failed: 
       if not self.hide_passes or \
-      not (self.passed_analysis and self.passed_generation): 
+      not (self.passed_analysis() and self.passed_generation()): 
         s = '{0:<45}\n '.format(self.left+' '+self.direction+' '+self.right) 
   
-      if not self.hide_passes or not self.passed_analysis:
+      if not self.hide_passes or not self.passed_analysis():
         # analysis check mark
-        if self.passed_analysis: s += pass_mark
+        if self.passed_analysis(): s += pass_mark
         else: s += fail_mark
         s += ' Analysis:' + ' '*25
 
@@ -186,9 +187,9 @@ class MorphTest:
         else: s += pass_mark
         s += '\n '
 
-      if not self.hide_passes or not self.passed_generation:
+      if not self.hide_passes or not self.passed_generation():
         # generation check mark
-        if self.passed_generation: s += pass_mark
+        if self.passed_generation(): s += pass_mark
         else: s += fail_mark
         s += ' Generation:' + ' '*23
       
@@ -219,9 +220,9 @@ class MorphTest:
         s += '\n'
       
       # comments
-      if not self.passed_analysis or not self.passed_generation: 
+      if not self.passed_analysis() or not self.passed_generation(): 
         c = ' Comments: {grey}'
-        if not self.passed_analysis:
+        if not self.passed_analysis():
           # analysis:
           if self.ana_missing: c += 'analysis is missing {0}. '.format(self.left)
           if self.ana_tn == False: c += '{0} was generated. '.format(self.right)
@@ -234,7 +235,7 @@ class MorphTest:
               c += 'and {0}.'.format(self.ana_fp[-1])
             elif len(self.ana_fp) == 1: c += ': {0}. '.format(self.ana_fp[0])       
         
-        if not self.passed_generation:
+        if not self.passed_generation():
           #generation:
           if self.gen_missing: 
             c += 'generation is missing {0}. '.format(self.right)
@@ -255,7 +256,7 @@ class MorphTest:
         c += '\n\n'
 
       else: c = '\n' # if there are no comments
-      if self.hide_passes and self.passed_analysis and self.passed_generation:
+      if self.hide_passes and self.passed_analysis() and self.passed_generation():
         s, c = '', ''
       return s + c
 
@@ -290,16 +291,14 @@ class Section:
 
     def get_counts(self):
       # gets section's pass count and fail count for analysis and generation
-      self.ana_passes, self.ana_fails = 0, 0
-      self.gen_passes, self.gen_fails = 0, 0
-
       for test in self.tests:
-        if test.passed_analysis: self.ana_passes += 1
+        if test.passed_analysis(): self.ana_passes += 1
         else: self.ana_fails += 1
-        if test.passed_generation: self.gen_passes += 1
+        if test.passed_generation(): self.gen_passes += 1
         else: self.gen_fails += 1
     
     def create_output(self, normal_style=True):
+        # this function is only used for normal or compact style output
         # make section header into a string
         s = '{grey}-'*80 + '{reset}\n'
         s += '{0}\nTests - section #{1:<17}'.format(self.title, self.number)
@@ -313,9 +312,6 @@ class Section:
           for test in self.tests:
             s += test.get_test_results()
         
-        # get section's pass count and fail count
-        self.get_counts() # (counts get populated to Section fields)  
-
         # make passes and fails counts into strings
         if not normal_style: # compact
           if self.ana_fails: s += '{0} '.format(fail_mark)
@@ -370,11 +366,6 @@ class Results:
         self._io.write(string.format(*args, **kwargs))
 
     def get_total_counts(self):
-      self.ana_passes, self.ana_fails = 0, 0
-      self.gen_passes, self.gen_fails = 0, 0
-
-      for section in self.sections:
-        section.get_counts()
       for section in self.sections:
         self.ana_passes += section.ana_passes 
         self.ana_fails += section.ana_fails
@@ -402,13 +393,10 @@ class Results:
         if self.args.test >= 0:
           section = self.sections[self.args.test]
           # get the section's counts
-          section.get_counts()
           self.ana_passes = section.ana_passes
           self.ana_fails = section.ana_fails
           self.gen_passes = section.gen_passes
-          self.gen_fails = section.gen_fails
-        else:
-          self.get_total_counts() 
+          self.gen_fails = section.gen_fails 
 
         # make passes and fails counts into strings 
         s = 'Overall results:\n'
@@ -427,11 +415,10 @@ class Results:
 
     def print_nothing(self):
       if self.args.test >= 0:
-        section.get_tests()
+        section = self.sections[self.args.test]
         if section.ana_fails or section.gen_fails: return 1
         else: return 0
       else: # all
-        self.get_total_tests()
         if self.ana_fails or self.gen_fails: return 1
         else: return 0
 
@@ -519,6 +506,11 @@ class Results:
           for section in self.sections:
             for test in section.tests:
               test.hide_passes = True
+        
+        # getting all counts 
+        for section in self.sections:
+          section.get_counts()
+        self.get_total_counts()
 
         # type of output
         if self.args.output == 'normal': self.print_normal()
