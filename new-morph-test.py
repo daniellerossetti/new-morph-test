@@ -1,7 +1,6 @@
 """
 **to dos:
   - implement hide fails+passes
-  - implement output types (normal, compact done; need final, none)
   - make sure tests are actually working now 
   -    # add 'do not analyse' negation (for spellchecker testing)
   - fix comments length  
@@ -13,15 +12,14 @@ from collections import OrderedDict
 from io import StringIO
 import libhfst
 import sys
-import yaml
-import time 
+import yaml 
 
 pass_mark = '{green}[✓]{reset}'
 fail_mark = '{red}[✗]{reset}'
 na_mark = ' - '
 
 def error_checking(n):
-    msg = 'Error: '
+    msg = 'Error {0}: '.format(n)
     if n == 2:   msg += 'there was an error opening the file provided.'
     elif n == 3: msg += 'outer sections of file should be "Config" and "Tests".'
     elif n == 4: 
@@ -33,7 +31,7 @@ def error_checking(n):
     elif n == 7: msg += 'the section requested does not exist.'
     elif n == 8: msg += 'the output options are: normal, compact, final, none.'
     print(msg)
-    sys.exit(num)
+    sys.exit(n)
 
 def argument_parsing():
     ap = ArgumentParser()
@@ -273,6 +271,14 @@ class Section:
               else: error_checking(6)
        
         return tests 
+
+    def get_counts(self):
+      # gets section's pass count and fail count for analysis and generation
+      for test in self.tests:
+        if test.passed_analysis: self.ana_passes += 1
+        else: self.ana_fails += 1
+        if test.passed_generation: self.gen_passes += 1
+        else: self.gen_fails += 1
     
     def create_output(self, normal_style=True):
         # make section header into a string
@@ -283,11 +289,7 @@ class Section:
         s += '{yellow}-'*80 + '{reset}\n'
 
         # get section's pass count and fail count
-        for test in self.tests:
-          if test.passed_analysis: self.ana_passes += 1
-          else: self.ana_fails += 1
-          if test.passed_generation: self.gen_passes += 1
-          else: self.gen_fails += 1
+        self.get_counts() # (counts get populated to Section fields)
  
         # normal output style
         if normal_style:
@@ -338,8 +340,8 @@ class Results:
         # printing stuff
         self._io = StringIO()
         self.colors = define_colors()
-        self.fails = 0
-        self.passes = 0
+        self.ana_passes, self.ana_fails = 0, 0
+        self.gen_passes, self.gen_fails = 0, 0
 
     def __str__(self):
         return self._io.getvalue()
@@ -347,13 +349,22 @@ class Results:
     def color_write(self, string, *args, **kwargs):
         kwargs.update(self.colors)
         self._io.write(string.format(*args, **kwargs))
+
+    def get_total_counts(self):
+      for section in self.sections:
+        section.get_counts()
+      for section in self.sections:
+        self.ana_passes += section.ana_passes 
+        self.ana_fails += section.ana_fails
+        self.gen_passes += section.gen_passes
+        self.gen_fails += section.gen_fails
     
     def print_normal(self): 
       if self.args.test >= 0:
-        self.color_write(str(self.sections[self.args.test]))
+        self.color_write(self.sections[self.args.test].create_output())
       else:
         for section in self.sections:
-          self.color_write(str(section))
+          self.color_write(section.create_output())
 
     def print_compact(self):
       if self.args.test >= 0:
@@ -364,15 +375,40 @@ class Results:
           self.color_write(section.create_output(normal_style=False))
 
     def print_final(self):
-        s = 'Total passes: {0}{1}{2}'.format('{green}', self.passes, '{reset}')
-        s += ', Total fails: {0}{1}{2}'.format('{red}', self.fails, '{reset}')
+        if self.args.test >= 0:
+          section = self.sections[self.args.test]
+          # get the section's counts
+          section.get_counts()
+          self.ana_passes = section.ana_passes
+          self.ana_fails = section.ana_fails
+          self.gen_passes = section.gen_passes
+          self.gen_fails = section.gen_fails
+        else:
+          self.get_total_counts() 
+
+        # make passes and fails counts into strings 
+        if self.ana_fails: s = '{0} '.format(fail_mark)
+        else: s = '{0} '.format(pass_mark)
+
+        s += 'Analysis - {0}: {1}, '.format(pass_mark, self.ana_passes)
+        s += '{0}: {1} / '.format(fail_mark, self.ana_fails)
+
+        if self.gen_fails: s += '{0} '.format(fail_mark)
+        else: s += '{0} '.format(pass_mark)
+
+        s += 'Generation - {0}: {1}, '.format(pass_mark, self.gen_passes)
+        s += '{0}: {1}'.format(fail_mark, self.gen_fails)
         self.color_write(s)
 
     def print_nothing(self):
-        if self.fails > 0:
-            return 1
-        else:
-            return 0
+      if self.args.test >= 0:
+        section.get_tests()
+        if section.ana_fails or section.gen_fails: return 1
+        else: return 0
+      else: # all
+        self.get_total_tests()
+        if self.ana_fails or self.gen_fails: return 1
+        else: return 0
 
     def lookup(self):
         # getting analysis data used in test
@@ -457,7 +493,7 @@ class Results:
         if self.args.output == 'normal': self.print_normal()
         elif self.args.output == 'compact': self.print_compact()
         elif self.args.output == 'final': self.print_final()
-        elif self.args.output == 'none': self.print_nothing()
+        elif self.args.output == 'none': return self.print_nothing()
         else: error_checking(8)
         #self.print_section(section)
         print(self)
@@ -502,7 +538,9 @@ def main():
     sections, morph, gen = load_data(args)
     if args.verbose: print('Getting results...')
     results = Results(sections, morph, gen, args)
-    results.run()
+    if args.output == 'none': return results.run()
+    else: results.run()
+
 
 if __name__ == "__main__":
     main()
