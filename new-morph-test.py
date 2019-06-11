@@ -1,8 +1,10 @@
 """
 **to dos:
-  - implement hide fails+passes, output types
+  - implement hide fails+passes
+  - implement output types (normal, compact done; need final, none)
   - make sure tests are actually working now 
   -    # add 'do not analyse' negation (for spellchecker testing)
+  - fix comments length  
 This script performs a morphological test on a file.
 Author: Danielle Rossetti Dos Santos
 """
@@ -29,6 +31,7 @@ def error_checking(n):
       msg += 'make sure items under "Tests" are mappings and follow the format.'
     elif n == 6: msg += 'possible direction arrows are =>, <=, or <=>.'
     elif n == 7: msg += 'the section requested does not exist.'
+    elif n == 8: msg += 'the output options are: normal, compact, final, none.'
     print(msg)
     sys.exit(num)
 
@@ -54,7 +57,8 @@ def argument_parsing():
     ap.add_argument('-ig', '--ignore-extra-generations',
                     dest='ignore_gen', action='store_true', help=h)
 
-    ap.add_argument('-p', '--hide-fails', dest='hide_fail', action='store_true',                    help='Suppresses fails to make finding passes easier.')
+    ap.add_argument('-p', '--hide-fails', dest='hide_fail', action='store_true',
+                    help='Suppresses fails to make finding passes easier.')
 
     h = 'Suppresses passes to make finding failures easier'
     ap.add_argument('-f', '--hide-passes', dest='hide_pass', 
@@ -246,9 +250,9 @@ class Section:
         self.title = title
         self.number = number
         self.mappings = mappings 
-        self.passes = 0
-        self.fails = 0
         self.tests = self.populate_tests()
+        self.ana_passes, self.ana_fails = 0, 0
+        self.gen_passes, self.gen_fails = 0, 0
 
     def populate_tests(self):
         tests = []
@@ -270,20 +274,43 @@ class Section:
        
         return tests 
     
-    def __str__(self):
+    def create_output(self, normal_style=True):
         # make section header into a string
         s = '{yellow}-'*80 + '{reset}\n'
         s += '{0}\nTests - section #{1:<17}'.format(self.title, self.number)
-        s += 'True pos    True neg   False pos   False neg\n'
+        if normal_style: s += 'True pos    True neg   False pos   False neg\n'
+        else: s += ' '*46 # compact
         s += '{yellow}-'*80 + '{reset}\n'
 
-        # make tests in section into strings
+        # get section's pass count and fail count
         for test in self.tests:
+          if test.passed_analysis: self.ana_passes += 1
+          else: self.ana_fails += 1
+          if test.passed_generation: self.gen_passes += 1
+          else: self.gen_fails += 1
+ 
+        # normal output style
+        if normal_style:
+          # make test results into strings
+          for test in self.tests:
             s += test.get_test_results()
 
         # make passes and fails counts into strings
-        s += 'Passes: {0}{1}{2}, '.format('{green}', self.passes, '{reset}')
-        s += 'Fails: {0}{1}{2}\n\n'.format('{red}', self.fails, '{reset}')
+        if not normal_style: # compact
+          if self.ana_fails: s += '{0} '.format(fail_mark)
+          else: s += '{0} '.format(pass_mark)
+
+        s += 'Analysis - {0}: {1}, '.format(pass_mark, self.ana_passes)
+        s += '{0}: {1}'.format(fail_mark, self.ana_fails)
+
+        if normal_style: s += ' / ' # same line if normal 
+        else:  # compact
+          if self.gen_fails: s += '\n{0} '.format(fail_mark)
+          else: s += '{0} '.format(pass_mark)
+
+        s += 'Generation - {0}: {1}, '.format(pass_mark, self.gen_passes)
+        s += '{0}: {1}\n\n'.format(fail_mark, self.gen_fails)
+        
         return s
 
 class Results:
@@ -322,10 +349,19 @@ class Results:
         self._io.write(string.format(*args, **kwargs))
     
     def print_normal(self): 
-        pass
+      if self.args.test >= 0:
+        self.color_write(str(self.sections[self.args.test]))
+      else:
+        for section in self.sections:
+          self.color_write(str(section))
 
     def print_compact(self):
-        pass
+      if self.args.test >= 0:
+        section = self.sections[self.args.test]
+        self.color_write(section.create_output(normal_style=False))
+      else:
+        for section in self.sections:
+          self.color_write(section.create_output(normal_style=False))
 
     def print_final(self):
         s = 'Total passes: {0}{1}{2}'.format('{green}', self.passes, '{reset}')
@@ -337,9 +373,6 @@ class Results:
             return 1
         else:
             return 0
-
-    def print_section(self, section):
-        self.color_write(str(section))
 
     def lookup(self):
         # getting analysis data used in test
@@ -407,18 +440,26 @@ class Results:
           if self.args.verbose:
             print('Running tests on section #{0}'.format(self.args.test))
           section = self.sections[self.args.test]
+          
+          # runnning tests
           self.run_analysis_tests(section)
           self.run_generation_tests(section)
-          self.print_section(section)
-          self.print_final()
         else:
             for section in self.sections:
                 if self.args.verbose: 
                   print('Running tests on section #{0}'.format(section.number))
+                
+                # running tests
                 self.run_analysis_tests(section)
                 self.run_generation_tests(section)
-                self.print_section(section)
-            self.print_final()
+        
+        # type of output
+        if self.args.output == 'normal': self.print_normal()
+        elif self.args.output == 'compact': self.print_compact()
+        elif self.args.output == 'final': self.print_final()
+        elif self.args.output == 'none': self.print_nothing()
+        else: error_checking(8)
+        #self.print_section(section)
         print(self)
           
 
