@@ -1,6 +1,6 @@
 """
 **to dos:
-  - implement ignore analyses, hide fails+passes, output types
+  - implement hide fails+passes, output types
   - make sure tests are actually working now 
   -    # add 'do not analyse' negation (for spellchecker testing)
 This script performs a morphological test on a file.
@@ -44,10 +44,16 @@ def argument_parsing():
     h += '(Default: normal)'
     ap.add_argument('-o', '--output', dest='output', default='normal', help=h)
     
-    h = 'Ignores any false positives. Will pass if expected results are found.'
-    ap.add_argument('-i', '--ignore-extra-analyses',
-                    dest='ignore', action='store_true', help=h)
-    
+    h = 'Ignores analysis false positives. '
+    h += 'Will pass if expected results are found.'
+    ap.add_argument('-ia', '--ignore-extra-analyses',
+                    dest='ignore_ana', action='store_true', help=h)
+
+    h = 'Ignores generation false positives. '
+    h += 'Will pass if expected results are found.'
+    ap.add_argument('-ig', '--ignore-extra-generations',
+                    dest='ignore_gen', action='store_true', help=h)
+
     ap.add_argument('-p', '--hide-fails', dest='hide_fail', action='store_true',                    help='Suppresses fails to make finding passes easier.')
 
     h = 'Suppresses passes to make finding failures easier'
@@ -121,23 +127,24 @@ class MorphTest:
         self.ana_tn = True
         self.ana_fp = []
         self.ana_missing = True
+        self.ignore_ana_fp = False
 
         # used for determining if test passed generation
         self.gen_tn = True
         self.gen_fp = []
         self.gen_missing = True
+        self.ignore_gen_fp = False
 
     def get_test_results(self):
       # did analysis pass?
-      if not self.ana_missing  \
-      and not len(self.ana_fp) \
-      and (self.ana_tn or self.ana_tn is None):
-          self.passed_analysis = True
+      if not self.ana_missing and (self.ana_tn or self.ana_tn is None):
+        if self.ignore_ana_fp: self.passed_analysis = True
+        elif not len(self.ana_fp): self.passed_analysis = True
+
       # did generation pass?
-      if not self.gen_missing  \
-      and not len(self.gen_fp) \
-      and (self.gen_tn or self.gen_tn is None):
-          self.passed_generation = True
+      if not self.gen_missing and (self.gen_tn or self.gen_tn is None):
+        if self.ignore_gen_fp: self.passed_generation = True
+        elif not len(self.ana_fp): self.passed_analysis = True
 
       # starting with test
       s = '{0:<45}\n '.format(self.left+' '+self.direction+' '+self.right) 
@@ -161,8 +168,10 @@ class MorphTest:
       s += ' '*9
 
       # false positive:
-      if not len(self.ana_fp): s += pass_mark
-      else: s +=  fail_mark
+      if self.ignore_ana_fp: s += na_mark
+      else:
+        if not len(self.ana_fp): s += pass_mark
+        else: s +=  fail_mark
       s += ' '*9
 
       # false negative:
@@ -190,8 +199,10 @@ class MorphTest:
       s += ' '*9
 
       # false positive:
-      if not len(self.gen_fp): s += pass_mark
-      else: s +=  fail_mark
+      if self.ignore_gen_fp: s += na_mark
+      else:
+        if not len(self.gen_fp): s += pass_mark
+        else: s +=  fail_mark
       s += ' '*9
 
       # false negative:
@@ -348,13 +359,14 @@ class Results:
     def run_analysis_tests(self, section):
         if self.args.verbose: print('Running analysis tests...')
         for test in section.tests:
+          if self.args.ignore_ana: test.ignore_ana_fp = True
           for result in test.ana_result:
             if test.direction == '<=' or test.direction == '<=>':
               if result == test.left: 
                 # true positive was found
                 test.ana_missing = False
               elif result not in self.analysis_dict[test.right]:
-                # if not in dict it's false positive
+                # if not in dict it's false positive 
                 test.ana_fp.append(result)
               if test.direction == '<=>':
                 # there can't be a true negative
@@ -369,6 +381,7 @@ class Results:
     def run_generation_tests(self, section):
         if self.args.verbose: print('Running generation tests...')
         for test in section.tests:  
+          if self.args.ignore_gen: test.ignore_gen_fp = True
           for result in test.gen_result:
             if test.direction == '=>' or test.direction == '<=>':
               if result == test.right:
@@ -419,7 +432,7 @@ def load_data(args):
     yaml_file.close()
     if args.verbose: print('Created dictionary from yaml file.')
       
-    # ensure dictionary contains only confif and tests
+    # ensure dictionary contains only config and tests
     if not dictionary['Config'] or not dictionary['Tests']: error_checking(3)
     if len(dictionary) != 2: error_checking(3)
 
