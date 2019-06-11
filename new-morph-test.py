@@ -2,8 +2,7 @@
 This script performs a morphological test on a yaml file.
 
 **to dos:
-  - make the counting of passes and fails not a total mess (it works but it's messy)
-  - implement hide fails+passes 
+  - make the counting of passes and fails not a total mess (it works but it's messy) 
   -    # add 'do not analyse' negation (for spellchecker testing)
 
 Author: Danielle Rossetti Dos Santos
@@ -56,10 +55,8 @@ def argument_parsing():
     h += 'Will pass if expected results are found.'
     ap.add_argument('-ig', '--ignore-extra-generations',
                     dest='ignore_gen', action='store_true', help=h)
-
-    ap.add_argument('-p', '--hide-fails', dest='hide_fail', action='store_true',
-                    help='Suppresses fails to make finding passes easier.')
-
+    
+    # removed 'hide fails' option because not sure if people used it at all
     h = 'Suppresses passes to make finding failures easier'
     ap.add_argument('-f', '--hide-passes', dest='hide_pass', 
                     action='store_true', help=h)
@@ -122,6 +119,7 @@ class MorphTest:
         self.right = right
         self.passed_analysis = False
         self.passed_generation = False
+        self.hide_passes = False
 
         # these will be added when running the tests
         self.ana_result = []
@@ -151,96 +149,104 @@ class MorphTest:
         elif not len(self.gen_fp): self.passed_generation = True
 
       # starting with test
-      s = '{0:<45}\n '.format(self.left+' '+self.direction+' '+self.right) 
+      # if passes don't need to be hidden or one direction has failed: 
+      if not self.hide_passes or \
+      not (self.passed_analysis and self.passed_generation): 
+        s = '{0:<45}\n '.format(self.left+' '+self.direction+' '+self.right) 
+  
+      if not self.hide_passes or not self.passed_analysis:
+        # analysis check mark
+        if self.passed_analysis: s += pass_mark
+        else: s += fail_mark
+        s += ' Analysis:' + ' '*25
+
+        # analysis tp, tn, fp, fn row
+        # true positive:
+        if self.ana_missing: s += fail_mark
+        elif self.ana_missing == None: s += na_mark
+        else: s += pass_mark
+        s += ' '*9
+
+        # true negative:
+        if self.ana_tn: s += pass_mark
+        elif self.ana_tn == None: s += na_mark
+        else: s += fail_mark
+        s += ' '*9
+
+        # false positive:
+        if self.ignore_ana_fp: s += na_mark
+        else:
+          if not len(self.ana_fp): s += pass_mark
+          else: s +=  fail_mark
+        s += ' '*9
+
+        # false negative:
+        if self.ana_missing: s += fail_mark
+        elif self.ana_missing == None: s += na_mark
+        else: s += pass_mark
+        s += '\n '
+
+      if not self.hide_passes or not self.passed_generation:
+        # generation check mark
+        if self.passed_generation: s += pass_mark
+        else: s += fail_mark
+        s += ' Generation:' + ' '*23
       
-      # analysis check mark
-      if self.passed_analysis: s += pass_mark
-      else: s += fail_mark
-      s += ' Analysis:' + ' '*25
+        # generation tp, tn, fp, fn row 
+        # true positive:
+        if self.gen_missing: s += fail_mark
+        elif self.gen_missing == None: s += na_mark
+        else: s += pass_mark
+        s += ' '*9
 
-      # analysis tp, tn, fp, fn row
-      # true positive:
-      if self.ana_missing: s += fail_mark
-      elif self.ana_missing == None: s += na_mark
-      else: s += pass_mark
-      s += ' '*9
+        # true negative:
+        if self.gen_tn: s += pass_mark
+        elif self.gen_tn == None: s += na_mark
+        else: s += fail_mark
+        s += ' '*9
 
-      # true negative:
-      if self.ana_tn: s += pass_mark
-      elif self.ana_tn == None: s += na_mark
-      else: s += fail_mark
-      s += ' '*9
+        # false positive:
+        if self.ignore_gen_fp: s += na_mark
+        else:
+          if not len(self.gen_fp): s += pass_mark
+          else: s +=  fail_mark
+        s += ' '*9
 
-      # false positive:
-      if self.ignore_ana_fp: s += na_mark
-      else:
-        if not len(self.ana_fp): s += pass_mark
-        else: s +=  fail_mark
-      s += ' '*9
-
-      # false negative:
-      if self.ana_missing: s += fail_mark
-      elif self.ana_missing == None: s += na_mark
-      else: s += pass_mark
-      s += '\n '
-
-      # generation check mark
-      if self.passed_generation: s += pass_mark
-      else: s += fail_mark
-      s += ' Generation:' + ' '*23
-      
-      # generation tp, tn, fp, fn row 
-      # true positive:
-      if self.gen_missing: s += fail_mark
-      elif self.gen_missing == None: s += na_mark
-      else: s += pass_mark
-      s += ' '*9
-
-      # true negative:
-      if self.gen_tn: s += pass_mark
-      elif self.gen_tn == None: s += na_mark
-      else: s += fail_mark
-      s += ' '*9
-
-      # false positive:
-      if self.ignore_gen_fp: s += na_mark
-      else:
-        if not len(self.gen_fp): s += pass_mark
-        else: s +=  fail_mark
-      s += ' '*9
-
-      # false negative:
-      if self.gen_missing: s += fail_mark
-      elif self.gen_missing == None: s += na_mark
-      else: s += pass_mark
-      s += '\n'
+        # false negative:
+        if self.gen_missing: s += fail_mark
+        elif self.gen_missing == None: s += na_mark
+        else: s += pass_mark
+        s += '\n'
       
       # comments
       if not self.passed_analysis or not self.passed_generation: 
         c = ' Comments: {grey}'
-        # analysis:
-        if self.ana_missing: c += 'analysis is missing {0}. '.format(self.left)
-        if self.ana_tn == False: c += '{0} was generated. '.format(self.right)
-        if len(self.ana_fp):
-          c += 'analysis returned unexpected result'
-          if len(self.ana_fp) > 1:
-            c += 's: '
-            for analysis in self.ana_fp[:-1]:
-              c += '{0}, '.format(analysis)
-            c += 'and {0}.'.format(self.ana_fp[-1])
-          elif len(self.ana_fp) == 1: c += ': {0}. '.format(self.ana_fp[0])       
-        # generation:
-        if self.gen_missing: 
-          c += 'generation is missing {0}. '.format(self.right)
-        if self.gen_tn == False: c += '{0} was analyzed. '.format(self.left)
-        if len(self.gen_fp):
-          c += 'generation returned unexpected result'
-          if len(self.gen_fp) > 1:
-            c += 's: '
-            for generation in self.gen_fp[:-1]:
-              c += '{0}, '.format(generation)
-            c += 'and {0}.'.format(self.gen_fp[-1])
-          elif len(self.gen_fp) == 1: c += ': {0}.'.format(self.gen_fp[0])
+        if not self.passed_analysis:
+          # analysis:
+          if self.ana_missing: c += 'analysis is missing {0}. '.format(self.left)
+          if self.ana_tn == False: c += '{0} was generated. '.format(self.right)
+          if len(self.ana_fp):
+            c += 'analysis returned unexpected result'
+            if len(self.ana_fp) > 1:
+              c += 's: '
+              for analysis in self.ana_fp[:-1]:
+                c += '{0}, '.format(analysis)
+              c += 'and {0}.'.format(self.ana_fp[-1])
+            elif len(self.ana_fp) == 1: c += ': {0}. '.format(self.ana_fp[0])       
+        
+        if not self.passed_generation:
+          #generation:
+          if self.gen_missing: 
+            c += 'generation is missing {0}. '.format(self.right)
+          if self.gen_tn == False: c += '{0} was analyzed. '.format(self.left)
+          if len(self.gen_fp):
+            c += 'generation returned unexpected result'
+            if len(self.gen_fp) > 1:
+              c += 's: '
+              for generation in self.gen_fp[:-1]:
+                c += '{0}, '.format(generation)
+              c += 'and {0}.'.format(self.gen_fp[-1])
+            elif len(self.gen_fp) == 1: c += ': {0}.'.format(self.gen_fp[0])
         c += '{reset}\n\n'
 
         # formatting comments better 
@@ -249,6 +255,8 @@ class MorphTest:
         c += '\n\n'
 
       else: c = '\n' # if there are no comments
+      if self.hide_passes and self.passed_analysis and self.passed_generation:
+        s, c = '', ''
       return s + c
 
 class Section:
@@ -506,13 +514,19 @@ class Results:
                 self.run_analysis_tests(section)
                 self.run_generation_tests(section)
         
+        # if passes are to be hidden
+        if self.args.hide_pass:
+          for section in self.sections:
+            for test in section.tests:
+              test.hide_passes = True
+
         # type of output
         if self.args.output == 'normal': self.print_normal()
         elif self.args.output == 'compact': self.print_compact()
         elif self.args.output == 'final': self.print_final()
         elif self.args.output == 'none': return self.print_nothing()
         else: error_checking(8)
-        #self.print_section(section)
+
         print(self)
           
 
