@@ -413,15 +413,6 @@ class Results:
         s += '{0}: {1}'.format(fail_mark, self.gen_fails)
         self.color_write(s)
 
-    def print_nothing(self):
-      if self.args.test >= 0:
-        section = self.sections[self.args.test]
-        if section.ana_fails or section.gen_fails: return 1
-        else: return 0
-      else: # all
-        if self.ana_fails or self.gen_fails: return 1
-        else: return 0
-
     def lookup(self):
         # getting analysis data used in test
         analysis_stream = libhfst.HfstInputStream(self.morph_path).read()
@@ -516,10 +507,18 @@ class Results:
         if self.args.output == 'normal': self.print_normal()
         elif self.args.output == 'compact': self.print_compact()
         elif self.args.output == 'final': self.print_final()
-        elif self.args.output == 'none': return self.print_nothing()
-        else: error_checking(8)
-
+        elif self.args.output != 'none': error_checking(8)
         print(self)
+
+        # exit code
+        if self.args.test >= 0:
+          section = self.sections[self.args.test]
+          if section.ana_fails or section.gen_fails: return 1
+          else: return 0
+        else: # all
+          if self.ana_fails or self.gen_fails: return 1
+          else: return 0
+
           
 
 def load_data(args):
@@ -561,9 +560,7 @@ def main():
     sections, morph, gen = load_data(args)
     if args.verbose: print('Getting results...')
     results = Results(sections, morph, gen, args)
-    if args.output == 'none': return results.run()
-    else: results.run()
-
+    return results.run()
 
 if __name__ == "__main__":
     main()
