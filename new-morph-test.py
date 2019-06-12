@@ -233,30 +233,30 @@ class MorphTest:
         c = ' Comments: {grey}'
         if not self.passed_analysis():
           # analysis:
-          if self.ana_missing: c += 'analysis is missing {0}. '.format(self.left)
-          if self.ana_tn == False: c += '{0} was generated. '.format(self.right)
+          if self.ana_missing: c += 'analysis is missing {}. '.format(self.left)
+          if self.ana_tn == False: c += '{} was generated. '.format(self.right)
           if len(self.ana_fp):
             c += 'analysis returned unexpected result'
             if len(self.ana_fp) > 1:
               c += 's: '
               for analysis in self.ana_fp[:-1]:
-                c += '{0}, '.format(analysis)
-              c += 'and {0}.'.format(self.ana_fp[-1])
-            elif len(self.ana_fp) == 1: c += ': {0}. '.format(self.ana_fp[0])       
+                c += '{}, '.format(analysis)
+              c += 'and {}.'.format(self.ana_fp[-1])
+            elif len(self.ana_fp) == 1: c += ': {}. '.format(self.ana_fp[0])       
         
         if not self.passed_generation():
           #generation:
           if self.gen_missing: 
-            c += 'generation is missing {0}. '.format(self.right)
-          if self.gen_tn == False: c += '{0} was analyzed. '.format(self.left)
+            c += 'generation is missing {}. '.format(self.right)
+          if self.gen_tn == False: c += '{} was analyzed. '.format(self.left)
           if len(self.gen_fp):
             c += 'generation returned unexpected result'
             if len(self.gen_fp) > 1:
               c += 's: '
               for generation in self.gen_fp[:-1]:
-                c += '{0}, '.format(generation)
-              c += 'and {0}.'.format(self.gen_fp[-1])
-            elif len(self.gen_fp) == 1: c += ': {0}.'.format(self.gen_fp[0])
+                c += '{}, '.format(generation)
+              c += 'and {}.'.format(self.gen_fp[-1])
+            elif len(self.gen_fp) == 1: c += ': {}.'.format(self.gen_fp[0])
         c += '{reset}\n\n'
 
         # formatting comments better 
@@ -312,7 +312,7 @@ class Section:
         # this function is only used for normal or compact style output
         # make section header into a string
         s = '{grey}-'*80 + '{reset}\n'
-        s += '{0}\nTests - section #{1:<17}'.format(self.title, self.number)
+        s += '{}\nTests - section #{:<17}'.format(self.title, self.number)
         if normal_style: s += 'True pos    True neg   False pos   False neg\n'
         else: s += ' '*46 # compact
         s += '{grey}-'*80 + '{reset}\n'
@@ -325,19 +325,19 @@ class Section:
         
         # make passes and fails counts into strings
         if not normal_style: # compact
-          if self.ana_fails: s += '{0} '.format(fail_mark)
-          else: s += '{0} '.format(pass_mark)
+          if self.ana_fails: s += '{} '.format(fail_mark)
+          else: s += '{} '.format(pass_mark)
 
-        s += 'Analysis - {0}: {1}, '.format(pass_mark, self.ana_passes)
-        s += '{0}: {1}'.format(fail_mark, self.ana_fails)
+        s += 'Analysis - {}: {}, '.format(pass_mark, self.ana_passes)
+        s += '{}: {}'.format(fail_mark, self.ana_fails)
 
         if normal_style: s += ' / ' # same line if normal 
         else:  # compact
-          if self.gen_fails: s += '\n{0} '.format(fail_mark)
-          else: s += '{0} '.format(pass_mark)
+          if self.gen_fails: s += '\n{} '.format(fail_mark)
+          else: s += '{} '.format(pass_mark)
 
-        s += 'Generation - {0}: {1}, '.format(pass_mark, self.gen_passes)
-        s += '{0}: {1}\n\n'.format(fail_mark, self.gen_fails)
+        s += 'Generation - {}: {}, '.format(pass_mark, self.gen_passes)
+        s += '{}: {}\n\n'.format(fail_mark, self.gen_fails)
         
         return s
 
@@ -439,9 +439,9 @@ class Results:
         # getting generation data used in test
         generation_stream = libhfst.HfstInputStream(self.gen_path).read()
         for section in self.sections:  
-            for test in section.tests:
-               for result in generation_stream.lookup(test.left):
-                 test.gen_result.append(result[0])
+          for test in section.tests:
+            for result in generation_stream.lookup(test.left):
+              test.gen_result.append(result[0])
           
     def run_analysis_tests(self, section):
         if self.args.verbose: print('Running analysis tests...')
@@ -504,8 +504,8 @@ class Results:
               print('Running tests on section #{0}'.format(section.number))
                 
             # running tests
-              self.run_analysis_tests(section)
-              self.run_generation_tests(section)
+            self.run_analysis_tests(section)
+            self.run_generation_tests(section)
         
         # if passes are to be hidden
         if self.args.hide_pass:
