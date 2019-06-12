@@ -415,17 +415,17 @@ class Results:
 
         # make passes and fails counts into strings 
         s = 'Overall results:\n'
-        if self.ana_fails: s += ' {0} '.format(fail_mark)
-        else: s += '{0} '.format(pass_mark)
+        if self.ana_fails: s += ' {} '.format(fail_mark)
+        else: s += '{} '.format(pass_mark)
 
-        s += 'Analysis - {0}: {1}, '.format(pass_mark, self.ana_passes)
-        s += '{0}: {1}\n'.format(fail_mark, self.ana_fails)
+        s += 'Analysis - {}: {}, '.format(pass_mark, self.ana_passes)
+        s += '{}: {}\n'.format(fail_mark, self.ana_fails)
 
-        if self.gen_fails: s += ' {0} '.format(fail_mark)
-        else: s += '{0} '.format(pass_mark)
+        if self.gen_fails: s += ' {} '.format(fail_mark)
+        else: s += '{} '.format(pass_mark)
 
-        s += 'Generation - {0}: {1}, '.format(pass_mark, self.gen_passes)
-        s += '{0}: {1}'.format(fail_mark, self.gen_fails)
+        s += 'Generation - {}: {}, '.format(pass_mark, self.gen_passes)
+        s += '{}: {}'.format(fail_mark, self.gen_fails)
         self.color_write(s)
 
     def lookup(self):
@@ -492,7 +492,7 @@ class Results:
         if self.args.test >= 0:
           if self.args.test > len(self.sections) - 1: error_checking(7)
           if self.args.verbose:
-            print('Running tests on section #{0}'.format(self.args.test))
+            print('Running tests on section #{}'.format(self.args.test))
           section = self.sections[self.args.test]
           
           # runnning tests
@@ -501,7 +501,7 @@ class Results:
         else:
           for section in self.sections:
             if self.args.verbose: 
-              print('Running tests on section #{0}'.format(section.number))
+              print('Running tests on section #{}'.format(section.number))
                 
             # running tests
             self.run_analysis_tests(section)
