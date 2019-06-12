@@ -1,25 +1,28 @@
 """
-This script performs a morphological test on a yaml file.
-
-**to dos:
-  - add spellchecker negation testing
-
+This script performs a morphological test on a yaml file (that has a certain format).
 Author: Danielle Rossetti Dos Santos
 """
+
 from argparse import ArgumentParser
 from collections import OrderedDict
 from io import StringIO
-import libhfst
-import textwrap
-import sys
-import yaml 
 
+import sys 
+import libhfst
+import yaml
+import textwrap 
+
+# defining a few strings that are used often
 pass_mark = '{green}[✓]{reset}'
 fail_mark = '{red}[✗]{reset}'
 na_mark = ' - '
 
 def error_checking(n):
-    msg = 'Error {0}: '.format(n)
+    """
+    Current function for printing error messages and exiting.
+    parameters: n - corresponds to a particular error (makes it easier to find)
+    """
+    msg = 'Error {}: '.format(n)
     if n == 2:   msg += 'there was an error opening the file provided.'
     elif n == 3: msg += 'outer sections of file should be "Config" and "Tests".'
     elif n == 4: 
@@ -112,6 +115,9 @@ def yaml_load_ordered(f):
     return yaml.load(f, _OrderedDictYAMLLoader)
 
 class MorphTest:
+    """
+    Holds information about each direction of a particular morphological test.
+    """
     def __init__(self, left, right, direction):
         self.left = left
         self.direction = direction 
@@ -135,25 +141,28 @@ class MorphTest:
         self.ignore_gen_fp = False
 
     def passed_analysis(self):
-      # did analysis pass?
-      if not self.ana_missing and (self.ana_tn or self.ana_tn is None):
-        if self.ignore_ana_fp: return True
-        elif not len(self.ana_fp): return True
-      return False
+        # did analysis pass?
+        if not self.ana_missing and (self.ana_tn or self.ana_tn is None):
+          if self.ignore_ana_fp: return True
+          elif not len(self.ana_fp): return True
+        return False
 
     def passed_generation(self):
-      # did generation pass?
-      if not self.gen_missing and (self.gen_tn or self.gen_tn is None):
-        if self.ignore_gen_fp: return True
-        elif not len(self.gen_fp): return True
-      return False
+        # did generation pass?
+        if not self.gen_missing and (self.gen_tn or self.gen_tn is None):
+          if self.ignore_gen_fp: return True
+          elif not len(self.gen_fp): return True
+        return False
 
     def get_test_results(self):
+      """ 
+      Creates string containing the information about the test.
+      """
       # starting with test
       # if passes don't need to be hidden or one direction has failed: 
       if not self.hide_passes or \
       not (self.passed_analysis() and self.passed_generation()): 
-        s = '{0:<45}\n '.format(self.left+' '+self.direction+' '+self.right) 
+        s = '{:<45}\n '.format(self.left+' '+self.direction+' '+self.right) 
   
       if not self.hide_passes or not self.passed_analysis():
         # analysis check mark
@@ -261,6 +270,9 @@ class MorphTest:
       return s + c
 
 class Section:
+    """
+    Holds information about the tests in a particular section of the .yaml file.
+    """
     def __init__(self, title, number, mappings):
         self.title = title
         self.number = number
@@ -271,8 +283,7 @@ class Section:
 
     def populate_tests(self):
         tests = []
-
-        # for each left (direction) right mapping:
+        # for each 'left (direction) right' mapping:
         for left in self.mappings:
           for map_direction, right in self.mappings[left].items():
             # if there are multiple items
@@ -290,12 +301,12 @@ class Section:
         return tests 
 
     def get_counts(self):
-      # gets section's pass count and fail count for analysis and generation
-      for test in self.tests:
-        if test.passed_analysis(): self.ana_passes += 1
-        else: self.ana_fails += 1
-        if test.passed_generation(): self.gen_passes += 1
-        else: self.gen_fails += 1
+        # gets section's pass count and fail count for analysis and generation
+        for test in self.tests:
+          if test.passed_analysis(): self.ana_passes += 1
+          else: self.ana_fails += 1
+          if test.passed_generation(): self.gen_passes += 1
+          else: self.gen_fails += 1
     
     def create_output(self, normal_style=True):
         # this function is only used for normal or compact style output
@@ -331,8 +342,12 @@ class Section:
         return s
 
 class Results:
+    """
+    Performs the tests and holds the list of Sections. 
+    """
     def __init__(self, sections_list, morph, gen, args):
-        # these dictionaries help ensuring there aren't false positives
+        # these dictionaries help ensure false positives 
+        # are actually false positives
         self.analysis_dict = {}
         for section in sections_list:
           for test in section.tests:
@@ -366,28 +381,28 @@ class Results:
         self._io.write(string.format(*args, **kwargs))
 
     def get_total_counts(self):
-      for section in self.sections:
-        self.ana_passes += section.ana_passes 
-        self.ana_fails += section.ana_fails
-        self.gen_passes += section.gen_passes
-        self.gen_fails += section.gen_fails
+        for section in self.sections:
+          self.ana_passes += section.ana_passes 
+          self.ana_fails += section.ana_fails
+          self.gen_passes += section.gen_passes
+          self.gen_fails += section.gen_fails
     
     def print_normal(self): 
-      if self.args.test >= 0:
-        self.color_write(self.sections[self.args.test].create_output())
-      else:
-        for section in self.sections:
-          self.color_write(section.create_output())
-      self.print_final()
+        if self.args.test >= 0:
+          self.color_write(self.sections[self.args.test].create_output())
+        else:
+          for section in self.sections:
+            self.color_write(section.create_output())
+        self.print_final()
 
     def print_compact(self):
-      if self.args.test >= 0:
-        section = self.sections[self.args.test]
-        self.color_write(section.create_output(normal_style=False))
-      else:
-        for section in self.sections:
+        if self.args.test >= 0:
+          section = self.sections[self.args.test]
           self.color_write(section.create_output(normal_style=False))
-      self.print_final()
+        else:
+          for section in self.sections:
+            self.color_write(section.create_output(normal_style=False))
+        self.print_final()
 
     def print_final(self):
         if self.args.test >= 0:
@@ -484,13 +499,13 @@ class Results:
           self.run_analysis_tests(section)
           self.run_generation_tests(section)
         else:
-            for section in self.sections:
-                if self.args.verbose: 
-                  print('Running tests on section #{0}'.format(section.number))
+          for section in self.sections:
+            if self.args.verbose: 
+              print('Running tests on section #{0}'.format(section.number))
                 
-                # running tests
-                self.run_analysis_tests(section)
-                self.run_generation_tests(section)
+            # running tests
+              self.run_analysis_tests(section)
+              self.run_generation_tests(section)
         
         # if passes are to be hidden
         if self.args.hide_pass:
@@ -519,8 +534,6 @@ class Results:
           if self.ana_fails or self.gen_fails: return 1
           else: return 0
 
-          
-
 def load_data(args):
     try: yaml_file = open(args.test_file, 'r')
     except: error_checking(2)
@@ -547,10 +560,10 @@ def load_data(args):
 
     all_sections = []
     for num, title in enumerate(tests):
-        # error if tests[title] isn't an ordered dictionary
-        if not isinstance(tests[title], OrderedDict): error_checking(5)
-        section = Section(title, num, tests[title])
-        all_sections.append(section)
+      # error if tests[title] isn't an ordered dictionary
+      if not isinstance(tests[title], OrderedDict): error_checking(5)
+      section = Section(title, num, tests[title])
+      all_sections.append(section)
     if args.verbose: print('Created section objects.')
 
     return all_sections, morph, gen
@@ -564,4 +577,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
