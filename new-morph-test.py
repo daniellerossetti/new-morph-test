@@ -334,7 +334,7 @@ class Section:
         if normal_style: s += ' / ' # same line if normal 
         else:  # compact
           if self.gen_fails: s += '\n{} '.format(fail_mark)
-          else: s += '{} '.format(pass_mark)
+          else: s += '\n{} '.format(pass_mark)
 
         s += 'Generation - {}: {}, '.format(pass_mark, self.gen_passes)
         s += '{}: {}\n\n'.format(fail_mark, self.gen_fails)
