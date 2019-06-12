@@ -416,13 +416,13 @@ class Results:
         # make passes and fails counts into strings 
         s = 'Overall results:\n'
         if self.ana_fails: s += ' {} '.format(fail_mark)
-        else: s += '{} '.format(pass_mark)
+        else: s += ' {} '.format(pass_mark)
 
         s += 'Analysis - {}: {}, '.format(pass_mark, self.ana_passes)
         s += '{}: {}\n'.format(fail_mark, self.ana_fails)
 
         if self.gen_fails: s += ' {} '.format(fail_mark)
-        else: s += '{} '.format(pass_mark)
+        else: s += ' {} '.format(pass_mark)
 
         s += 'Generation - {}: {}, '.format(pass_mark, self.gen_passes)
         s += '{}: {}'.format(fail_mark, self.gen_fails)
